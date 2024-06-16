@@ -139,6 +139,7 @@ class DataFrame(SOMAArray, somacore.DataFrame):
         platform_config: Optional[options.PlatformConfig] = None,
         context: Optional[SOMATileDBContext] = None,
         tiledb_timestamp: Optional[OpenTimestamp] = None,
+        add_missing_soma_joinid: bool = True,
     ) -> "DataFrame":
         """Creates the data structure on disk/S3/cloud.
 
@@ -214,7 +215,7 @@ class DataFrame(SOMAArray, somacore.DataFrame):
             Experimental.
         """
         context = _validate_soma_tiledb_context(context)
-        schema = _canonicalize_schema(schema, index_column_names)
+        schema = _canonicalize_schema(schema, index_column_names, add_missing_soma_joinid=add_missing_soma_joinid)
         if domain is None:
             domain = tuple(None for _ in index_column_names)
         else:
@@ -614,7 +615,9 @@ class DataFrame(SOMAArray, somacore.DataFrame):
 
 
 def _canonicalize_schema(
-    schema: pa.Schema, index_column_names: Sequence[str]
+    schema: pa.Schema,
+    index_column_names: Sequence[str],
+    add_missing_soma_joinid: bool = True,
 ) -> pa.Schema:
     """Turns an Arrow schema into the canonical version and checks for errors.
 
@@ -622,8 +625,8 @@ def _canonicalize_schema(
     (e.g. ``soma_joinid``).
     """
     _util.check_type("schema", schema, (pa.Schema,))
-    if not index_column_names:
-        raise ValueError("DataFrame requires one or more index columns")
+    # if not index_column_names:
+    #     raise ValueError("DataFrame requires one or more index columns")
 
     if SOMA_JOINID in schema.names:
         joinid_type = schema.field(SOMA_JOINID).type
@@ -631,7 +634,7 @@ def _canonicalize_schema(
             raise ValueError(
                 f"{SOMA_JOINID} field must be of type Arrow int64 but is {joinid_type}"
             )
-    else:
+    elif add_missing_soma_joinid:
         # add SOMA_JOINID
         schema = schema.append(pa.field(SOMA_JOINID, pa.int64()))
 

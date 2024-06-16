@@ -103,6 +103,7 @@ _NDArr = TypeVar("_NDArr", bound=NDArray)
 _TDBO = TypeVar("_TDBO", bound=TileDBObject[RawHandle])
 
 
+Uns = Mapping[str, Any]
 AdditionalMetadata = Optional[Dict[str, Metadatum]]
 
 
@@ -1137,7 +1138,8 @@ def _write_dataframe(
     additional_metadata: AdditionalMetadata = None,
     platform_config: Optional[PlatformConfig] = None,
     context: Optional[SOMATileDBContext] = None,
-    axis_mapping: AxisIDMapping,
+    axis_mapping: Optional[AxisIDMapping] = None,
+    add_missing_soma_joinid: bool = True,
 ) -> DataFrame:
     """
     The id_column_name is for disambiguating rows in append mode;
@@ -1150,20 +1152,21 @@ def _write_dataframe(
     adata.obs, adata.var, etc.
     """
     original_index_name = None
-    if df.index is not None and df.index.name is not None and df.index.name != "index":
-        original_index_name = df.index.name
+    if axis_mapping:
+        if df.index is not None and df.index.name is not None and df.index.name != "index":
+            original_index_name = df.index.name
 
-    df.reset_index(inplace=True)
-    if id_column_name is not None:
-        if id_column_name in df:
-            if "index" in df:
-                df.drop(columns=["index"], inplace=True)
-        else:
-            df.rename(columns={"index": id_column_name}, inplace=True)
+        df.reset_index(inplace=True)
+        if id_column_name is not None:
+            if id_column_name in df:
+                if "index" in df:
+                    df.drop(columns=["index"], inplace=True)
+            else:
+                df.rename(columns={"index": id_column_name}, inplace=True)
 
-    df[SOMA_JOINID] = np.asarray(axis_mapping.data, dtype=np.int64)
+        df[SOMA_JOINID] = np.asarray(axis_mapping.data, dtype=np.int64)
 
-    df.set_index(SOMA_JOINID, inplace=True)
+        df.set_index(SOMA_JOINID, inplace=True)
 
     return _write_dataframe_impl(
         df,
@@ -1174,6 +1177,7 @@ def _write_dataframe(
         original_index_name=original_index_name,
         platform_config=platform_config,
         context=context,
+        add_missing_soma_joinid=add_missing_soma_joinid,
     )
 
 
@@ -1187,6 +1191,7 @@ def _write_dataframe_impl(
     original_index_name: Optional[str] = None,
     platform_config: Optional[PlatformConfig] = None,
     context: Optional[SOMATileDBContext] = None,
+    add_missing_soma_joinid: bool = True,
 ) -> DataFrame:
     s = _util.get_start_stamp()
     logging.log_io(None, f"START  WRITING {df_uri}")
@@ -1206,11 +1211,15 @@ def _write_dataframe_impl(
         )
 
     try:
+        index_kwargs = dict()
+        if not add_missing_soma_joinid:
+            index_kwargs["index_column_names"] = (id_column_name,)
         soma_df = DataFrame.create(
             df_uri,
             schema=arrow_table.schema,
             platform_config=platform_config,
             context=context,
+            **index_kwargs,
         )
     except (AlreadyExistsError, NotCreateableError):
         if ingestion_params.error_if_already_exists:
@@ -1410,7 +1419,6 @@ def update_obs(
         context=context,
         platform_config=platform_config,
         default_index_name=default_index_name,
-        measurement_name="N/A for obs",
     )
 
 
@@ -1465,10 +1473,41 @@ def update_var(
         exp.ms[measurement_name].var,
         new_data,
         "update_var",
-        measurement_name=measurement_name,
         context=context,
         platform_config=platform_config,
         default_index_name=default_index_name,
+    )
+
+
+def update_uns(
+        exp: Experiment,
+        new_data: Mapping[str, object],
+        measurement_name: str,
+        *,
+        context: Optional[SOMATileDBContext] = None,
+        platform_config: Optional[PlatformConfig] = None,
+) -> None:
+    """
+    Re-writes ``uns`` data to an existing SOMA experiment.
+    Lifecycle:
+        Experimental.
+    """
+    if exp.closed or exp.mode != "w":
+        raise SOMAError(f"Experiment must be open for write: {exp.uri}")
+    if measurement_name not in exp.ms:
+        raise SOMAError(
+            f"Experiment {exp.uri} has no measurement named {measurement_name}"
+        )
+    measurement = exp.ms[measurement_name]
+
+    _ingest_uns_dict(
+        measurement,
+        "uns",
+        new_data,
+        platform_config=platform_config,
+        context=context,
+        ingestion_params=IngestionParams("update", label_mapping=None),
+        use_relative_uri=None,
     )
 
 
@@ -1477,7 +1516,6 @@ def _update_dataframe(
     new_data: pd.DataFrame,
     caller_name: str,
     *,
-    measurement_name: str,
     context: Optional[SOMATileDBContext] = None,
     platform_config: Optional[PlatformConfig],
     default_index_name: str,
@@ -1702,9 +1740,10 @@ def add_X_layer(
     add_matrix_to_collection(
         exp,
         measurement_name,
-        "X",
-        X_layer_name,
-        X_layer_data,
+        collection_name="X",
+        matrix_name=X_layer_name,
+        matrix_data=X_layer_data,
+        ingest_mode=ingest_mode,
         use_relative_uri=use_relative_uri,
     )
 
@@ -2457,7 +2496,7 @@ def _chunk_is_contained_in_axis(
 
 def _maybe_ingest_uns(
     m: Measurement,
-    uns: Mapping[str, object],
+    uns: Uns,
     *,
     platform_config: Optional[PlatformConfig],
     context: Optional[SOMATileDBContext],
@@ -2545,16 +2584,19 @@ def _ingest_uns_node(
         coll.metadata[key] = value
         return
 
+    kwargs = dict(
+        platform_config=platform_config,
+        context=context,
+        ingestion_params=ingestion_params,
+        additional_metadata=additional_metadata,
+    )
     if isinstance(value, Mapping):
         # Mappings are represented as sub-dictionaries.
         _ingest_uns_dict(
             coll,
             key,
             value,
-            platform_config=platform_config,
-            context=context,
-            ingestion_params=ingestion_params,
-            additional_metadata=additional_metadata,
+            **kwargs,
             use_relative_uri=use_relative_uri,
             level=level + 1,
         )
@@ -2562,15 +2604,16 @@ def _ingest_uns_node(
 
     if isinstance(value, pd.DataFrame):
         num_rows = value.shape[0]
+        index_name = value.index.name
+        value = value.reset_index()
+        if index_name is None:
+            index_name = value.columns.tolist()[0]
         with _write_dataframe(
-            _util.uri_joinpath(coll.uri, key),
-            value,
-            None,
-            platform_config=platform_config,
-            context=context,
-            ingestion_params=ingestion_params,
-            additional_metadata=additional_metadata,
-            axis_mapping=AxisIDMapping.identity(num_rows),
+                _util.uri_joinpath(coll.uri, key),
+                value,
+                id_column_name=index_name,
+                **kwargs,
+                add_missing_soma_joinid=False,
         ) as df:
             _maybe_set(coll, key, df, use_relative_uri=use_relative_uri)
         return
@@ -2591,22 +2634,16 @@ def _ingest_uns_node(
                 coll,
                 key,
                 value,
-                platform_config,
-                context=context,
                 use_relative_uri=use_relative_uri,
-                ingestion_params=ingestion_params,
-                additional_metadata=additional_metadata,
+                **kwargs
             )
         else:
             _ingest_uns_ndarray(
                 coll,
                 key,
                 value,
-                platform_config,
-                context=context,
                 use_relative_uri=use_relative_uri,
-                ingestion_params=ingestion_params,
-                additional_metadata=additional_metadata,
+                **kwargs
             )
         return
 
@@ -2630,10 +2667,6 @@ def _ingest_uns_string_array(
     """
     Ingest an uns string array. In the SOMA data model, we have NDArrays _of number only_ ...
     so we need to make this a SOMADataFrame.
-
-    Ideally we don't want to an index column "soma_joinid" -- "index", maybe.
-    However, ``SOMADataFrame`` _requires_ that soma_joinid be present, either
-    as an index column, or as a data column. The former is less confusing.
     """
 
     if len(value.shape) == 1:
@@ -2673,18 +2706,9 @@ def _ingest_uns_1d_string_array(
 ) -> None:
     """Helper for ``_ingest_uns_string_array``"""
     n = len(value)
-    # An array like ["a", "b", "c"] becomes a DataFrame like
-    # soma_joinid value
-    # 0           a
-    # 1           b
-    # 2           c
-    df = pd.DataFrame(
-        data={
-            SOMA_JOINID: np.arange(n, dtype=np.int64),
-            _UNS_OUTGEST_COLUMN_NAME_1D: [str(e) if e else "" for e in value],
-        }
-    )
-    df.set_index("soma_joinid", inplace=True)
+    df = pd.DataFrame({
+        _UNS_OUTGEST_COLUMN_NAME_1D: [str(e) if e else "" for e in value],
+    })
 
     df_uri = _util.uri_joinpath(coll.uri, key)
     with _write_dataframe_impl(
@@ -2695,6 +2719,7 @@ def _ingest_uns_1d_string_array(
         platform_config=platform_config,
         context=context,
         additional_metadata=additional_metadata,
+        add_missing_soma_joinid=False,
     ) as soma_df:
         _maybe_set(coll, key, soma_df, use_relative_uri=use_relative_uri)
         # Since ND arrays in the SOMA data model are arrays _of number_,
@@ -2719,17 +2744,15 @@ def _ingest_uns_2d_string_array(
     must nonetheless keep this as 2D rather than flattening to length-N 1D. That's because
     this ``uns`` data is solely of interest for AnnData ingest/outgest, and it must go
     back out the way it came in."""
-    num_rows, num_cols = value.shape
-    data: Dict[str, Any] = {"soma_joinid": np.arange(num_rows, dtype=np.int64)}
+    num_cols = value.shape[1]
     # An array like [["a", "b", "c"], ["d", "e", "f"]] becomes a DataFrame like
-    # soma_joinid values_0 values_1 values_2
-    # 0           a        b        c
-    # 1           d        e        f
-    for j in range(num_cols):
-        column_name = f"values_{j}"
-        data[column_name] = [str(e) if e else "" for e in value[:, j]]
-    df = pd.DataFrame(data=data)
-    df.set_index("soma_joinid", inplace=True)
+    # values_0 values_1 values_2
+    # a        b        c
+    # d        e        f
+    df = pd.DataFrame({
+        f"values_{j}": [str(e) if e else "" for e in value[:, j]]
+        for j in range(num_cols)
+    })
 
     df_uri = _util.uri_joinpath(coll.uri, key)
     with _write_dataframe_impl(
@@ -2740,6 +2763,7 @@ def _ingest_uns_2d_string_array(
         platform_config=platform_config,
         context=context,
         additional_metadata=additional_metadata,
+        add_missing_soma_joinid=False,
     ) as soma_df:
         _maybe_set(coll, key, soma_df, use_relative_uri=use_relative_uri)
         # Since ND arrays in the SOMA data model are arrays _of number_,

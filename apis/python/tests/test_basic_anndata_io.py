@@ -18,6 +18,8 @@ from tiledbsoma._tiledb_object import TileDBObject
 from tiledbsoma._util import verify_obs_and_var_eq
 import tiledb
 
+from tiledbsoma.io.ingest import Uns, update_uns
+from tiledbsoma.io.outgest import _extract_uns
 from ._util import TESTDATA
 
 
@@ -980,45 +982,55 @@ def test_id_names(tmp_path, obs_id_name, var_id_name, indexify_obs, indexify_var
         assert list(bdata.var.index) == list(soma_var[var_id_name])
 
 
-@pytest.mark.parametrize(
-    "outgest_uns_keys", [["int_scalar", "strings", "np_ndarray_2d"], None]
+pd_df_indexed = pd.DataFrame(
+    data={"column_1": np.asarray(["d", "e", "f"])},
+    index=np.arange(3).astype(str),
 )
-def test_uns_io(tmp_path, outgest_uns_keys):
-    obs = pd.DataFrame(
-        data={"obs_id": np.asarray(["a", "b", "c"])},
-        index=np.arange(3).astype(str),
-    )
-    var = pd.DataFrame(
-        data={"var_id": np.asarray(["x", "y"])},
-        index=np.arange(2).astype(str),
-    )
-    X = np.zeros([3, 2])
+pd_df_nonindexed = pd.DataFrame(
+    data={"column_1": np.asarray(["g", "h", "i"])},
+)
 
-    uns = {
-        # These are stored in SOMA as metadata
-        "int_scalar": 7,
-        "float_scalar": 8.5,
-        "string_scalar": "hello",
-        # These are stored in SOMA as SOMADataFrame
-        "pd_df_indexed": pd.DataFrame(
-            data={"column_1": np.asarray(["d", "e", "f"])},
+
+def tmp_adata(
+        obs: Optional[pd.DataFrame] = None,
+        var: Optional[pd.DataFrame] = None,
+        X: Optional[np.ndarray] = None,
+        uns: Optional[Uns] = None
+):
+    if obs is None:
+        obs = pd.DataFrame(
+            {"obs_id": ["a", "b", "c"]},
             index=np.arange(3).astype(str),
-        ),
-        "pd_df_nonindexed": pd.DataFrame(
-            data={"column_1": np.asarray(["g", "h", "i"])},
-        ),
-        # These are stored in SOMA as SOMA ND arrays
-        "np_ndarray_1d": np.asarray([1, 2, 3]),
-        "np_ndarray_2d": np.asarray([[1, 2, 3], [4, 5, 6]]),
-        # This are stored in SOMA as a SOMACollection
-        "strings": {
-            # This are stored in SOMA as a SOMADataFrame, since SOMA ND arrays are necessarily
-            # arrays *of numbers*. This is okay since the one and only job of SOMA uns is to
-            # faithfully ingest from AnnData and outgest back.
-            "string_np_ndarray_1d": np.asarray(["j", "k", "l"]),
-            "string_np_ndarray_2d": np.asarray([["m", "n", "o"], ["p", "q", "r"]]),
-        },
-    }
+        )
+    if var is None:
+        var = pd.DataFrame(
+            {"var_id": ["x", "y"]},
+            index=np.arange(2).astype(str),
+        )
+    if X is None:
+        X = np.zeros([len(obs), len(var)])
+    if uns is None:
+        uns = {
+            # These are stored in SOMA as metadata
+            "int_scalar": 7,
+            "float_scalar": 8.5,
+            "string_scalar": "hello",
+            # These are stored in SOMA as SOMADataFrame
+            "pd_df_indexed": pd_df_indexed,
+            "pd_df_nonindexed": pd_df_nonindexed,
+            # These are stored in SOMA as SOMA ND arrays
+            "np_ndarray_1d": np.asarray([1, 2, 3]),
+            "np_ndarray_2d": np.asarray([[1, 2, 3], [4, 5, 6]]),
+            # This are stored in SOMA as a SOMACollection
+            "strings": {
+                # This are stored in SOMA as a SOMADataFrame, since SOMA ND arrays are necessarily
+                # arrays *of numbers*. This is okay since the one and only job of SOMA uns is to
+                # faithfully ingest from AnnData and outgest back.
+                "string_np_ndarray_1d": np.asarray(["j", "k", "l"]),
+                "string_np_ndarray_2d": np.asarray([["m", "n", "o"], ["p", "q", "r"]]),
+            },
+        }
+
     adata = anndata.AnnData(
         obs=obs,
         var=var,
@@ -1026,12 +1038,30 @@ def test_uns_io(tmp_path, outgest_uns_keys):
         uns=uns,
         dtype=X.dtype,
     )
+    return adata
+
+
+def make_soma(
+        path: str,
+        measurement_name="meas",
+        obs: Optional[pd.DataFrame] = None,
+        var: Optional[pd.DataFrame] = None,
+        X: Optional[np.ndarray] = None,
+        uns: Optional[Uns] = None
+):
+    adata = tmp_adata(obs=obs, var=var, X=X, uns=uns)
     original = adata.copy()
-
-    soma_uri = tmp_path.as_posix()
-
-    tiledbsoma.io.from_anndata(soma_uri, adata, measurement_name="RNA")
+    tiledbsoma.io.from_anndata(path, adata, measurement_name=measurement_name)
     verify_obs_and_var_eq(original, adata)
+    return adata
+
+
+@pytest.mark.parametrize(
+    "outgest_uns_keys", [["int_scalar", "strings", "np_ndarray_2d"], None]
+)
+def test_uns_io(tmp_path, outgest_uns_keys):
+    soma_uri = tmp_path.as_posix()
+    adata = make_soma(soma_uri, measurement_name="RNA")
 
     with tiledbsoma.Experiment.open(soma_uri) as exp:
         bdata = tiledbsoma.io.to_anndata(
@@ -1064,6 +1094,49 @@ def test_uns_io(tmp_path, outgest_uns_keys):
 
     else:
         assert set(b.keys()) == set(outgest_uns_keys)
+
+
+DF = pd.DataFrame
+
+
+@pytest.mark.parametrize(
+    "uns0, uns1",
+    [
+        # ({"int_scalar": 111}, {"int_scalar": 222}),
+        # DF index is lost during simple AnnData round-trip
+        # ({"pd_df_indexed": pd_df_indexed}, {"pd_df_nonindexed": pd_df_nonindexed}),
+        (
+                {"df": DF({"col": list("gggggg")})},
+                {"df": DF({"col": list("hhhhhh")})},
+        ),
+    ]
+)
+def test_update_uns(tmp_path, uns0, uns1):
+    uri = tmp_path.as_posix()
+    make_soma(
+        uri,
+        obs=DF({"obs_id": list("abc")}),
+        var=DF({"var_id": list("xy")}),
+        uns=uns0,
+    )
+    with Experiment.open(uri) as exp:
+        m = exp.ms["meas"]
+        uns = _extract_uns(m['uns'])
+        assert uns == uns0
+    with Experiment.open(uri, "w") as exp:
+        update_uns(
+            exp,
+            uns1,
+            "meas",
+        )
+    with Experiment.open(uri, "r") as exp:
+        bdata = tiledbsoma.io.to_anndata(exp, measurement_name="meas")
+    assert bdata.uns == uns1
+
+    with Experiment.open(uri) as exp:
+        m = exp.ms["meas"]
+        new_uns = _extract_uns(m["uns"])
+        assert new_uns == uns1
 
 
 @pytest.mark.parametrize("write_index", [0, 1])
