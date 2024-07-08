@@ -117,7 +117,9 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
         uri: str,
         *,
         type: pa.DataType,
-        shape: Sequence[Union[int, None]],
+        shape: Sequence[Union[int, None]],  # XXX TOUCH
+        max_shape: Optional[Sequence[Union[int, None]]] = None,  # XXX TOUCH
+        # XXX maxshape ...
         platform_config: Optional[options.PlatformConfig] = None,
         context: Optional[SOMATileDBContext] = None,
         tiledb_timestamp: Optional[OpenTimestamp] = None,
@@ -126,16 +128,32 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
 
         index_column_schema = []
         index_column_data = {}
+
+        shape_map = {}
+        if max_shape is None:
+            max_shape = [None] * len(shape)
+
+        # XXX COMMENT
+        print("SNDA::CREATE shape", shape)
         for dim_idx, dim_shape in enumerate(shape):
             dim_name = f"soma_dim_{dim_idx}"
+            if dim_shape is None:
+                shape_map[dim_name] = 1  # XXX COMMENT
+            else:
+                shape_map[dim_name] = shape[dim_idx]
+
+            dim_max_shape = max_shape[dim_idx]
+
             pa_field = pa.field(dim_name, pa.int64())
             dim_capacity, dim_extent = cls._dim_capacity_and_extent(
                 dim_name,
-                dim_shape,
+                dim_max_shape,
                 TileDBCreateOptions.from_platform_config(platform_config),
             )
             index_column_schema.append(pa_field)
             index_column_data[pa_field.name] = [0, dim_capacity - 1, dim_extent]
+
+        print("SNDA::CREATE shape_map", shape_map)
 
         index_column_info = pa.RecordBatch.from_pydict(
             index_column_data, schema=pa.schema(index_column_schema)
@@ -150,8 +168,10 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
                 format=carrow_type,
                 index_column_info=index_column_info,
                 ctx=context.native_context,
+                shape=shape_map,
                 platform_config=plt_cfg,
                 timestamp=(0, timestamp_ms),
+                # XXX SHAPE
             )
         except SOMAError as e:
             raise map_exception_for_create(e, uri) from None

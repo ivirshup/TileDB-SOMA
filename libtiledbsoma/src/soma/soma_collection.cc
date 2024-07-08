@@ -245,6 +245,7 @@ std::shared_ptr<SOMASparseNDArray> SOMACollection::add_new_sparse_ndarray(
     std::shared_ptr<SOMAContext> ctx,
     std::string_view format,
     ArrowTable index_columns,
+    std::map<std::string, int64_t> shape,
     PlatformConfig platform_config,
     std::vector<std::string> column_names,
     ResultOrder result_order,
@@ -259,6 +260,7 @@ std::shared_ptr<SOMASparseNDArray> SOMACollection::add_new_sparse_ndarray(
         ArrowTable(
             std::move(index_columns.first), std::move(index_columns.second)),
         ctx,
+        shape,
         platform_config,
         timestamp);
 

@@ -55,6 +55,7 @@ void load_soma_sparse_ndarray(py::module& m) {
                std::string format,
                py::object index_column_info,
                std::shared_ptr<SOMAContext> context,
+               std::map<string, int64_t> shape,
                PlatformConfig platform_config,
                std::optional<std::pair<uint64_t, uint64_t>> timestamp) {
                 ArrowSchema index_column_schema;
@@ -74,6 +75,7 @@ void load_soma_sparse_ndarray(py::module& m) {
                             std::make_unique<ArrowArray>(index_column_array),
                             std::make_unique<ArrowSchema>(index_column_schema)),
                         context,
+                        shape,
                         platform_config,
                         timestamp);
                 } catch (const std::out_of_range& e) {
@@ -89,6 +91,7 @@ void load_soma_sparse_ndarray(py::module& m) {
             "format"_a,
             "index_column_info"_a,
             "ctx"_a,
+            "shape"_a,
             "platform_config"_a,
             "timestamp"_a = py::none())
 

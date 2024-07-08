@@ -266,6 +266,7 @@ class SOMACollection : public SOMAGroup {
         std::shared_ptr<SOMAContext> ctx,
         std::string_view format,
         ArrowTable index_columns,
+        std::map<std::string, int64_t> shape,
         PlatformConfig platform_config = PlatformConfig(),
         std::vector<std::string> column_names = {},
         ResultOrder result_order = ResultOrder::automatic,

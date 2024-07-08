@@ -111,12 +111,14 @@ TEST_CASE("SOMADenseNDArray: metadata") {
     std::string uri = "mem://unit-test-dense-ndarray";
 
     auto index_columns = helper::create_column_index_info();
+    std::map<std::string, int64_t> shape; // XXX TO DO
     SOMASparseNDArray::create(
         uri,
         "l",
         ArrowTable(
             std::move(index_columns.first), std::move(index_columns.second)),
         ctx,
+        shape,
         PlatformConfig(),
         TimestampRange(0, 2));
 

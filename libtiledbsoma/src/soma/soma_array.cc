@@ -41,7 +41,7 @@ using namespace tiledb;
 //= public static
 //===================================================================
 
-std::unique_ptr<SOMAArray> SOMAArray::create(
+std::unique_ptr<SOMAArray> SOMAArray::create( // XXX TOUCH
     std::shared_ptr<SOMAContext> ctx,
     std::string_view uri,
     ArraySchema schema,
@@ -808,6 +808,32 @@ uint64_t SOMAArray::nnz_slow() {
 std::vector<int64_t> SOMAArray::shape() {
     std::vector<int64_t> result;
     auto dimensions = mq_->schema()->domain().dimensions();
+
+    printf("SOMAArray::shape ENTER\n");
+
+    // ----------------------------------------------------------------
+    auto current_domain = tiledb::ArraySchemaExperimental::current_domain(*ctx_->tiledb_ctx(), arr_->schema());
+    if (current_domain.is_empty()) {
+      printf("CD IS EMPTY\n");
+    } else {
+      printf("CD IS NON-EMPTY\n");
+      auto t = current_domain.type();
+      if (t != TILEDB_NDRECTANGLE) {
+        printf("CD TYPE IS NOT NDRECTANGLE, BAD!\n");
+      } else {
+        printf("CD TYPE IS NDRECTANGLE, GOOD!\n");
+
+        NDRectangle ndrect = current_domain.ndrectangle();
+
+        for (auto dimension_name : dimension_names()) {
+          // TODO: non-int64 types for SOMADataFrame extra dims.
+          // This simply needs to be integrated with switch statements as in the legacy code below.
+          auto range = ndrect.range<int64_t>(dimension_name);
+          printf("CD DIM %s %ld : %ld\n", dimension_name.c_str(), range[0], range[1]);
+        }
+      }
+    }
+    // ----------------------------------------------------------------
 
     for (const auto& dim : dimensions) {
         switch (dim.type()) {

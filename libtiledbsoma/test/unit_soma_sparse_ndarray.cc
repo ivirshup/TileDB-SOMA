@@ -37,12 +37,15 @@ TEST_CASE("SOMASparseNDArray: basic") {
     std::string uri = "mem://unit-test-sparse-ndarray-basic";
 
     auto index_columns = helper::create_column_index_info();
+
+    std::map<std::string, int64_t> shape; // XXX POPULATE
     SOMASparseNDArray::create(
         uri,
         "l",
         ArrowTable(
             std::move(index_columns.first), std::move(index_columns.second)),
         ctx,
+        shape,
         PlatformConfig(),
         TimestampRange(0, 2));
 
@@ -89,12 +92,14 @@ TEST_CASE("SOMASparseNDArray: platform_config") {
     platform_config.sparse_nd_array_dim_zstd_level = 6;
 
     auto index_columns = helper::create_column_index_info();
+    std::map<std::string, int64_t> shape; // XXX POPULATE
     SOMASparseNDArray::create(
         uri,
         "l",
         ArrowTable(
             std::move(index_columns.first), std::move(index_columns.second)),
         ctx,
+        shape,
         platform_config);
 
     auto soma_dataframe = SOMASparseNDArray::open(uri, OpenMode::read, ctx);
@@ -115,12 +120,14 @@ TEST_CASE("SOMASparseNDArray: metadata") {
     std::string uri = "mem://unit-test-sparse-ndarray";
 
     auto index_columns = helper::create_column_index_info();
+    std::map<std::string, int64_t> shape; // XXX POPULATE
     SOMASparseNDArray::create(
         uri,
         "l",
         ArrowTable(
             std::move(index_columns.first), std::move(index_columns.second)),
         ctx,
+        shape,
         PlatformConfig(),
         TimestampRange(0, 2));
 
