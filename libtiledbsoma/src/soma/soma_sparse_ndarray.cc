@@ -47,10 +47,10 @@ void SOMASparseNDArray::create(
     std::map<std::string, int64_t> shape,
     PlatformConfig platform_config,
     std::optional<TimestampRange> timestamp) {
-
     auto index_column_array = std::move(index_columns.first);
     auto index_column_schema = std::move(index_columns.second);
     uint64_t index_column_size = index_column_schema->n_children;
+    auto tctx = ctx->tiledb_ctx();
 
     auto schema = std::make_unique<ArrowSchema>();
     schema->format = strdup("+s");
@@ -81,7 +81,7 @@ void SOMASparseNDArray::create(
     attr->release = &ArrowAdapter::release_schema;
 
     auto tiledb_schema = ArrowAdapter::tiledb_schema_from_arrow_schema(
-        ctx->tiledb_ctx(),
+        tctx,
         std::move(schema),
         ArrowTable(
             std::move(index_column_array), std::move(index_column_schema)),
@@ -89,20 +89,17 @@ void SOMASparseNDArray::create(
         true,
         platform_config);
 
-    // ----------------------------------------------------------------
-    if (true) {
-      auto tctx = *ctx->tiledb_ctx();
-      CurrentDomain current_domain(tctx);
-      NDRectangle ndrect(tctx, tiledb_schema.domain());
-      for (auto it : shape) {
+    // XXX comment more please kthx
+    CurrentDomain current_domain(*tctx);
+    NDRectangle ndrect(*tctx, tiledb_schema.domain());
+    for (auto it : shape) {
         auto dim_name = it.first;
         auto length = it.second;
-        ndrect.set_range<int64_t>(dim_name, 0, length-1);
-      }
-      current_domain.set_ndrectangle(ndrect);
-      ArraySchemaExperimental::set_current_domain(tctx, tiledb_schema, current_domain);
+        ndrect.set_range<int64_t>(dim_name, 0, length - 1);
     }
-    // ----------------------------------------------------------------
+    current_domain.set_ndrectangle(ndrect);
+    ArraySchemaExperimental::set_current_domain(
+        *tctx, tiledb_schema, current_domain);
 
     SOMAArray::create(ctx, uri, tiledb_schema, "SOMASparseNDArray", timestamp);
 }

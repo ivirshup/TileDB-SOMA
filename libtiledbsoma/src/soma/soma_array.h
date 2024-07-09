@@ -575,6 +575,13 @@ class SOMAArray : public SOMAObject {
     std::vector<int64_t> shape();
 
     /**
+     * @brief XXX write me please thx
+     *
+     * @return XXX write me please thx
+     */
+    std::vector<int64_t> maxshape();
+
+    /**
      * @brief Get the number of dimensions.
      *
      * @return uint64_t Number of dimensions.

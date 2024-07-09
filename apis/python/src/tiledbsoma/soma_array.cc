@@ -526,6 +526,8 @@ void load_soma_array(py::module& m) {
 
         .def_property_readonly("shape", &SOMAArray::shape)
 
+        .def_property_readonly("maxshape", &SOMAArray::maxshape)
+
         .def_property_readonly("uri", &SOMAArray::uri)
 
         .def_property_readonly("column_names", &SOMAArray::column_names)

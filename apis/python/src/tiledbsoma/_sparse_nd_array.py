@@ -118,7 +118,7 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
         *,
         type: pa.DataType,
         shape: Sequence[Union[int, None]],  # XXX TOUCH
-        max_shape: Optional[Sequence[Union[int, None]]] = None,  # XXX TOUCH
+        maxshape: Optional[Sequence[Union[int, None]]] = None,  # XXX TOUCH
         # XXX maxshape ...
         platform_config: Optional[options.PlatformConfig] = None,
         context: Optional[SOMATileDBContext] = None,
@@ -130,11 +130,15 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
         index_column_data = {}
 
         shape_map = {}
-        if max_shape is None:
-            max_shape = [None] * len(shape)
+        if maxshape is None:
+            maxshape = [None] * len(shape)
+        else:
+            if len(shape) != len(maxshape):
+                raise ValueError(
+                    f"shape and maxshape must have the same lengths; got {len(shape)} != {len(maxshape)}"
+                )
 
         # XXX COMMENT
-        print("SNDA::CREATE shape", shape)
         for dim_idx, dim_shape in enumerate(shape):
             dim_name = f"soma_dim_{dim_idx}"
             if dim_shape is None:
@@ -142,7 +146,7 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
             else:
                 shape_map[dim_name] = shape[dim_idx]
 
-            dim_max_shape = max_shape[dim_idx]
+            dim_max_shape = maxshape[dim_idx]
 
             pa_field = pa.field(dim_name, pa.int64())
             dim_capacity, dim_extent = cls._dim_capacity_and_extent(
@@ -152,8 +156,6 @@ class SparseNDArray(NDArray, somacore.SparseNDArray):
             )
             index_column_schema.append(pa_field)
             index_column_data[pa_field.name] = [0, dim_capacity - 1, dim_extent]
-
-        print("SNDA::CREATE shape_map", shape_map)
 
         index_column_info = pa.RecordBatch.from_pydict(
             index_column_data, schema=pa.schema(index_column_schema)

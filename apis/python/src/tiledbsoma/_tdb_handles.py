@@ -398,6 +398,10 @@ class SOMAArrayWrapper(Wrapper[_ArrType]):
     def shape(self) -> Tuple[int, ...]:
         return tuple(self._handle.shape)
 
+    @property
+    def maxshape(self) -> Tuple[int, ...]:
+        return tuple(self._handle.maxshape)
+
 
 class DataFrameWrapper(SOMAArrayWrapper[clib.SOMADataFrame]):
     """Wrapper around a Pybind11 SOMADataFrame handle."""
@@ -414,6 +418,11 @@ class DataFrameWrapper(SOMAArrayWrapper[clib.SOMADataFrame]):
     @property
     def shape(self) -> Tuple[int, ...]:
         # Shape is not implemented for DataFrames
+        raise NotImplementedError
+
+    @property
+    def maxshape(self) -> Tuple[int, ...]:
+        # Shape is not implemented for DataFrames -- XXX ?!?
         raise NotImplementedError
 
 

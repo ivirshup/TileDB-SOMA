@@ -95,6 +95,14 @@ class NDArray(SOMAArray, somacore.NDArray):
         """
         return cast(Tuple[int, ...], tuple(self._handle.shape))
 
+    @property
+    def maxshape(self) -> Tuple[int, ...]:
+        """XXX write me please thank you
+        Lifecycle:
+            Experimental.
+        """
+        return cast(Tuple[int, ...], tuple(self._handle.maxshape))
+
     def reshape(self, shape: Tuple[int, ...]) -> None:
         """Unsupported operation for this object type.
 

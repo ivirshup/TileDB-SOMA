@@ -38,7 +38,7 @@ TEST_CASE("SOMASparseNDArray: basic") {
 
     auto index_columns = helper::create_column_index_info();
 
-    std::map<std::string, int64_t> shape; // XXX POPULATE
+    std::map<std::string, int64_t> shape;  // XXX POPULATE
     SOMASparseNDArray::create(
         uri,
         "l",
@@ -92,7 +92,7 @@ TEST_CASE("SOMASparseNDArray: platform_config") {
     platform_config.sparse_nd_array_dim_zstd_level = 6;
 
     auto index_columns = helper::create_column_index_info();
-    std::map<std::string, int64_t> shape; // XXX POPULATE
+    std::map<std::string, int64_t> shape;  // XXX POPULATE
     SOMASparseNDArray::create(
         uri,
         "l",
@@ -120,7 +120,7 @@ TEST_CASE("SOMASparseNDArray: metadata") {
     std::string uri = "mem://unit-test-sparse-ndarray";
 
     auto index_columns = helper::create_column_index_info();
-    std::map<std::string, int64_t> shape; // XXX POPULATE
+    std::map<std::string, int64_t> shape;  // XXX POPULATE
     SOMASparseNDArray::create(
         uri,
         "l",

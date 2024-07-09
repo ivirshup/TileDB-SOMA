@@ -63,20 +63,20 @@ TEST_CASE("SOMACollection: add SOMASparseNDArray") {
         base_uri, OpenMode::write, ctx, ts);
     REQUIRE(soma_collection->timestamp() == ts);
 
-//    std::shared_ptr<SOMASparseNDArray> add_new_sparse_ndarray(
-//        std::string_view key,
-//        std::string_view uri,
-//        URIType uri_type,
-//        std::shared_ptr<SOMAContext> ctx,
-//        std::string_view format,
-//        ArrowTable index_columns,
-//        std::map<std::string, int64_t> shape,
-//        PlatformConfig platform_config = PlatformConfig(),
-//        std::vector<std::string> column_names = {},
-//        ResultOrder result_order = ResultOrder::automatic,
-//        std::optional<TimestampRange> timestamp = std::nullopt);
+    //    std::shared_ptr<SOMASparseNDArray> add_new_sparse_ndarray(
+    //        std::string_view key,
+    //        std::string_view uri,
+    //        URIType uri_type,
+    //        std::shared_ptr<SOMAContext> ctx,
+    //        std::string_view format,
+    //        ArrowTable index_columns,
+    //        std::map<std::string, int64_t> shape,
+    //        PlatformConfig platform_config = PlatformConfig(),
+    //        std::vector<std::string> column_names = {},
+    //        ResultOrder result_order = ResultOrder::automatic,
+    //        std::optional<TimestampRange> timestamp = std::nullopt);
 
-    std::map<std::string, int64_t> shape; // XXX POPULATE
+    std::map<std::string, int64_t> shape;  // XXX POPULATE
     auto soma_sparse = soma_collection->add_new_sparse_ndarray(
         "sparse_ndarray",
         sub_uri,

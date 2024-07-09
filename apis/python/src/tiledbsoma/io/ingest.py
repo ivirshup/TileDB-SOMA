@@ -1307,12 +1307,12 @@ def _create_from_matrix(
         # A SparseNDArray must be appendable in soma.io.
         # XXX TOUCH
         shape = matrix.shape
-        max_shape = [None for _ in matrix.shape]
+        maxshape = [None for _ in matrix.shape]
         soma_ndarray = cls.create(
             uri,
             type=pa.from_numpy_dtype(matrix.dtype),
             shape=shape,
-            max_shape=max_shape,
+            maxshape=maxshape,
             platform_config=platform_config,
             context=context,
         )
