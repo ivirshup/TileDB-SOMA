@@ -97,7 +97,9 @@ std::tuple<std::string, uint64_t> create_array(
     // Open array for writing
     Array array(ctx, uri, TILEDB_WRITE, TemporalPolicy(TimeTravel, timestamp));
     if (LOG_DEBUG_ENABLED()) {
-        array.schema().dump();
+        std::stringstream ss;
+        ss << array.schema();
+        std::cout << ss.str();
     }
 
     // Generate fragments in random order
